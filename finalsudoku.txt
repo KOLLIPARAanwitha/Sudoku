@@ -1,0 +1,123 @@
+import sys; args = sys.argv[1:]
+# Anwitha Kollipara, Period 4
+import time;
+
+def setGlobals(puzzle):
+    N = int(len(puzzle)**0.5)
+    n = int(N**0.5)
+    SYMSET = {'1','2','3','4','5','6','7','8','9'}
+    return(N, n, SYMSET)
+
+def getConstraintSets(puzzle, N, n):
+    toRet = [{i for i in range(rowCount*9, (rowCount+1)*9)} for rowCount in range(0, N)]
+    # for rowCount in range(0, N):
+    #     toRet.append({i for i in range(rowCount*9, (rowCount+1)*9)})
+    for colCount in range(0, N):
+        toRet.append({i*N+colCount for i in range(0,N)})
+    for subCount in range(0, N):
+        tempSet = set()
+        for subRowI in range(0, n):
+            xPos = subCount%n
+            yPos = subCount // n
+
+            for time in range(0, n):
+                tempSet.add(subRowI * N + time+ 3 * xPos + 27 * yPos)
+        # tempSet = {(subRowI * N + time+ 3 * (subCount%n) + 27 * (subCount // n)) for time in range(0,n) for subRowI in range(0, n)}
+        toRet.append(tempSet)
+    return toRet
+
+def TwoDPrint(puzzle, N, n):
+    for row in range(0, N):
+        newStr = '|'
+        for index in range(0, N):
+            newStr+=puzzle[row*N+index]
+            if (index%n == n-1): newStr +='|'
+        print(newStr)
+        if (row%n == n-1): print('-'*(N+4))
+
+def getNeighborValues(puzzle, blankIndex):
+    return set([puzzle[index] for index in gNeighbors[blankIndex] if puzzle[index] in SYMSET])
+
+def findBestSymbol (puzzle, dictAllNeighbors):
+    bestSymbolSet = SYMSET
+    bestSymbol = '1'
+    for set in constraintsets:
+        for symbol in SYMSET:
+            possibleIndexSets = [currIndex for currIndex in set if puzzle[currIndex] == '.' and not symbol in dictAllNeighbors[currIndex]]
+            if len(possibleIndexSets) == 1: return (symbol, possibleIndexSets, len(possibleIndexSets))
+            if len(possibleIndexSets) > 0 and len(possibleIndexSets) < len(bestSymbolSet):
+                bestSymbolSet = possibleIndexSets
+                bestSymbol = symbol
+    return (bestSymbol, bestSymbolSet, len(bestSymbolSet))
+
+def findBestPeriod (puzzle, dictAllNeighbors):
+    indNeighborCount = {}
+    for index in range(0, len(puzzle)):
+        if puzzle[index]=='.':
+            numNeighbors = len(dictAllNeighbors[index])
+            if numNeighbors == (N-1) or numNeighbors == N: return (index, numNeighbors)
+            indNeighborCount[index] = numNeighbors
+    maxInd = max(indNeighborCount, key = indNeighborCount.get)
+    return (maxInd, indNeighborCount[maxInd])
+
+def changeNeighborSets (puzzle, dictAllNeighbors, index, symbol):
+    dictAllNeighbors[index].add(symbol)
+    indexNeighbors = gNeighbors[index]
+    for neighbor in indexNeighbors:
+        if not symbol in dictAllNeighbors[neighbor]:
+            dictAllNeighbors[neighbor].add(symbol)
+    return dictAllNeighbors
+
+def bruteForce(puzzle, dictAllNeighbors):
+    if not '.' in puzzle: return puzzle
+    blankIndex, numNbrs = findBestPeriod(puzzle, dictAllNeighbors)
+    bestSymbol, bestSymbolIndices, bestSymbolNbrs = findBestSymbol(puzzle, dictAllNeighbors)
+    if numNbrs==8 or (len(SYMSET) - numNbrs) <= bestSymbolNbrs:
+        choices = SYMSET - dictAllNeighbors[blankIndex]
+        for eachChoice in choices:
+            subPuzzle = puzzle[:blankIndex] + eachChoice + puzzle[blankIndex + 1:]
+            moddictAllNeighbors = {k: {*dictAllNeighbors[k]} for k in dictAllNeighbors}
+            moddictAllNeighbors = changeNeighborSets(puzzle, moddictAllNeighbors, blankIndex, eachChoice)
+            bF = bruteForce(subPuzzle, moddictAllNeighbors)
+            if bF: return bF
+    else:
+        choices = bestSymbolIndices
+        for indexChoice in choices:
+            subPuzzle = puzzle[:indexChoice] + bestSymbol + puzzle[indexChoice + 1:]
+            moddictAllNeighbors = {k: {*dictAllNeighbors[k]} for k in dictAllNeighbors}
+            moddictAllNeighbors = changeNeighborSets(puzzle, moddictAllNeighbors, indexChoice, bestSymbol)
+            bF = bruteForce(subPuzzle, moddictAllNeighbors)
+            if bF: return bF
+    return ''
+
+def checkSum (puzzle): return (sum([ord(char) for char in puzzle if char in SYMSET])- 48*N*N)
+
+if '.txt' in args[0]: lstPzls = open(args[0], 'r').read().splitlines()
+else: lstPzls = [args[0]]
+counter = 1
+overallStartTime = time.time()
+for currPuzzle in lstPzls:
+    startTime = time.time()
+    puzzle = currPuzzle.replace('\'','')
+    N, n, SYMSET = setGlobals(currPuzzle)
+    print(f'{counter}: {currPuzzle}')
+    gNeighbors = []
+    constraintsets = getConstraintSets(currPuzzle, N, n)
+    for ind in range(0, len(currPuzzle)):
+        setNeighbors = set()
+        for setIndex in range(0, len(constraintsets)):
+            if ind in constraintsets[setIndex]:
+                # toAdd = {neighborIndex for neighborIndex in constraintsets[setIndex] if not neighborIndex in setNeighbors and neighborIndex!=ind}
+                for neighborIndex in constraintsets[setIndex]:
+                    if not neighborIndex in setNeighbors and neighborIndex!=ind: setNeighbors.add(neighborIndex)
+                # setNeighbors = setNeighbors | toAdd
+
+        # setNeighbors = {neighborIndex for neighborIndex in constraintsets[setIndex] for setIndex in range(0, N*3) if ind in constraintsets[setIndex] if
+        #                 not neighborIndex in setNeighbors and neighborIndex!=ind}
+        gNeighbors.append(setNeighbors)
+    gdictAllNeighbors = {index: set(getNeighborValues(currPuzzle, index))for index in range(0, N**2)}
+    solution = bruteForce(currPuzzle, gdictAllNeighbors)
+    spaces = ' '*(len(str(counter))+2)
+    print(f'{spaces}{solution} {checkSum(solution)} {time.time()-startTime}s')
+    counter+=1
+print(f'Total time: {time.time()-overallStartTime}')
